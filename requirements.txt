@@ -1,4 +1,6 @@
-torch==2.5.0
+--extra-index-url=https://download.pytorch.org/whl/cu128
+torch
+torchvision
 qrcode==7.4.2 # >8 breaks horde-engine 2.20.12 via the qr code generation nodes
 
 certifi # Required for SSL cert resolution
