@@ -45,14 +45,14 @@ class LogStats:
     def get_date(self) -> str | None:
         # Dates in log format for filtering
         if self.period == PERIOD_TODAY:
-            adate = datetime.datetime.now()
+            target_date = datetime.datetime.now()
         elif self.period == PERIOD_YESTERDAY:
-            adate = datetime.datetime.now() - datetime.timedelta(1)
+            target_date = datetime.datetime.now() - datetime.timedelta(1)
         else:
-            adate = None
-        if adate:
-            adate = adate.strftime("%Y-%m-%d")
-        return adate
+            target_date = None
+        if target_date:
+            target_date = target_date.strftime("%Y-%m-%d")
+        return target_date
 
     def get_num_lines(self, file_path: str) -> int:
         with open(file_path, "r+") as fp:
@@ -96,11 +96,15 @@ class LogStats:
             with open(logfile, encoding="UTF-8", errors="ignore") as infile:
                 for line in infile:
                     # Grab the lines we're interested in for models
-                    if regex := REGEX.match(line):
-                        if self.period in [PERIOD_TODAY, PERIOD_YESTERDAY] and regex.group(1) != self.get_date():
+                    if model_regex_match := REGEX.match(line):
+                        date_matches = (
+                            self.period in [PERIOD_TODAY, PERIOD_YESTERDAY] 
+                            and model_regex_match.group(1) != self.get_date()
+                        )
+                        if date_matches:
                             continue
                         # Extract model name
-                        model = regex.group(2)
+                        model = model_regex_match.group(2)
 
                         # Remember we used this model
                         if model in self.unused_models:
@@ -114,10 +118,10 @@ class LogStats:
 
                     # Grab kudos lines
                     # Grab the lines we're interested in
-                    if regex := KUDOS_REGEX.match(line):
+                    if kudos_regex_match := KUDOS_REGEX.match(line):
                         # Extract kudis and time
-                        timestamp = regex.group(1)[:-2]  # truncate to hour
-                        kudos = regex.group(2)
+                        timestamp = kudos_regex_match.group(1)[:-2]  # truncate to hour
+                        kudos = kudos_regex_match.group(2)
                         if timestamp in self.kudos:
                             self.kudos[timestamp] += float(kudos)
                         else:
@@ -132,8 +136,8 @@ class LogStats:
 
         # If we're reporting on kudos, do that
         if self.period == PERIOD_KUDOS_HOUR:
-            for k, v in self.kudos.items():
-                print(k, round(v))
+            for timestamp, kudos_value in self.kudos.items():
+                print(timestamp, round(kudos_value))
             return
 
         # Whats our longest model name?
@@ -141,14 +145,14 @@ class LogStats:
 
         scores = sorted(((self.used_models[model], model) for model in self.used_models), reverse=True)
         total = sum(count for count, name in scores)
-        for j, (count, name) in enumerate(scores, start=1):
+        for rank_position, (count, name) in enumerate(scores, start=1):
             perc = round((count / total) * 100, 1)
-            print(f"{j:>2}. {name:<{max_len}} {perc}% ({count})")
+            print(f"{rank_position:>2}. {name:<{max_len}} {perc}% ({count})")
         print()
         if self.unused_models:
             print("The following models were not used at all:")
-            for m in self.unused_models:
-                print(f"  {m}")
+            for unused_model in self.unused_models:
+                print(f"  {unused_model}")
         else:
             print("There were no unused models.")
 

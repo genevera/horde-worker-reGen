@@ -518,9 +518,9 @@ class ProcessMap(dict[int, HordeProcessInfo]):
     def delete_safety_processes(self) -> None:
         """Clear all safety processes."""
         ids_to_delete = []
-        for p in self.values():
-            if p.process_type == HordeProcessType.SAFETY:
-                ids_to_delete.append(p.process_id)
+        for process_info in self.values():
+            if process_info.process_type == HordeProcessType.SAFETY:
+                ids_to_delete.append(process_info.process_id)
 
         for process_id in ids_to_delete:
             logger.debug(f"Deleting safety process {process_id} from process map")
@@ -547,19 +547,19 @@ class ProcessMap(dict[int, HordeProcessInfo]):
     def num_inference_processes(self) -> int:
         """Return the number of inference processes."""
         count = 0
-        for p in self.values():
-            if p.process_type == HordeProcessType.INFERENCE:
+        for process_info in self.values():
+            if process_info.process_type == HordeProcessType.INFERENCE:
                 count += 1
         return count
 
     def num_loaded_inference_processes(self) -> int:
         """Return the number of inference processes that haven't been ended."""
         count = 0
-        for p in self.values():
+        for process_info in self.values():
             if (
-                p.process_type == HordeProcessType.INFERENCE
-                and p.last_process_state != HordeProcessState.PROCESS_ENDING
-                and p.last_process_state != HordeProcessState.PROCESS_ENDED
+                process_info.process_type == HordeProcessType.INFERENCE
+                and process_info.last_process_state != HordeProcessState.PROCESS_ENDING
+                and process_info.last_process_state != HordeProcessState.PROCESS_ENDED
             ):
                 count += 1
         return count
@@ -1380,11 +1380,11 @@ class HordeWorkerProcessManager:
         import torch
 
         self._device_map = TorchDeviceMap(root={})
-        for i in range(torch.cuda.device_count()):
-            device = torch.cuda.get_device_properties(i)
-            self._device_map.root[i] = TorchDeviceInfo(
+        for device_index in range(torch.cuda.device_count()):
+            device = torch.cuda.get_device_properties(device_index)
+            self._device_map.root[device_index] = TorchDeviceInfo(
                 device_name=device.name,
-                device_index=i,
+                device_index=device_index,
                 total_memory=device.total_memory,
             )
 
@@ -1614,14 +1614,14 @@ class HordeWorkerProcessManager:
             raise ValueError("num_processes_to_start cannot be less than 0")
 
         # Start the required number of processes
-        for i in range(num_processes_to_start):
+        for process_number in range(num_processes_to_start):
             # Create a two-way communication pipe for the parent and child processes
             pid = len(self._process_map)
             self._start_inference_process(pid)
 
             logger.info(f"Started inference process (id: {pid})")
 
-            if i == 0:
+            if process_number == 0:
                 # Sleep for 4 seconds to allow the first process to start and download the model references
                 time.sleep(4)
 
@@ -2133,16 +2133,16 @@ class HordeWorkerProcessManager:
 
                 any_safety_failed = False
 
-                for i in range(len(completed_job_info.job_image_results)):
+                for image_index in range(len(completed_job_info.job_image_results)):
                     # We add to the image faults, all faults due to source images/masks
                     if completed_job_info.sdk_api_job_info.id_ is None:
                         continue
-                    completed_job_info.job_image_results[i].generation_faults += self.job_faults[
+                    completed_job_info.job_image_results[image_index].generation_faults += self.job_faults[
                         completed_job_info.sdk_api_job_info.id_
                     ]
-                    replacement_image = message.safety_evaluations[i].replacement_image_base64
+                    replacement_image = message.safety_evaluations[image_index].replacement_image_base64
 
-                    if message.safety_evaluations[i].failed:
+                    if message.safety_evaluations[image_index].failed:
                         logger.error(
                             f"Job {message.job_id} image #{i} faulted during safety checks. "
                             "Check the safety process logs for more information.",
@@ -2151,9 +2151,9 @@ class HordeWorkerProcessManager:
                         continue
 
                     if replacement_image is not None:
-                        completed_job_info.job_image_results[i].image_base64 = replacement_image
+                        completed_job_info.job_image_results[image_index].image_base64 = replacement_image
                         num_images_censored += 1
-                        if message.safety_evaluations[i].is_csam:
+                        if message.safety_evaluations[image_index].is_csam:
                             num_images_csam += 1
                 if (
                     completed_job_info.sdk_api_job_info.id_ is not None
@@ -2173,29 +2173,29 @@ class HordeWorkerProcessManager:
                 if any_safety_failed:
                     completed_job_info.state = GENERATION_STATE.faulted
                 completed_job_info.censored = False
-                for i in range(len(completed_job_info.job_image_results)):
-                    if message.safety_evaluations[i].is_csam:
+                for image_index in range(len(completed_job_info.job_image_results)):
+                    if message.safety_evaluations[image_index].is_csam:
                         new_meta_entry = GenMetadataEntry(
                             type=METADATA_TYPE.censorship,
                             value=METADATA_VALUE.csam,
                         )
-                        completed_job_info.job_image_results[i].generation_faults.append(new_meta_entry)
+                        completed_job_info.job_image_results[image_index].generation_faults.append(new_meta_entry)
                         completed_job_info.state = GENERATION_STATE.csam
                         completed_job_info.censored = True
-                    elif message.safety_evaluations[i].is_nsfw:
+                    elif message.safety_evaluations[image_index].is_nsfw:
                         # This just marks images as nsfw, if not censored already
-                        if message.safety_evaluations[i].replacement_image_base64 is None:
+                        if message.safety_evaluations[image_index].replacement_image_base64 is None:
                             new_meta_entry = GenMetadataEntry(
                                 type=METADATA_TYPE.information,
                                 value=METADATA_VALUE.nsfw,
                             )
-                            completed_job_info.job_image_results[i].generation_faults.append(new_meta_entry)
+                            completed_job_info.job_image_results[image_index].generation_faults.append(new_meta_entry)
                         else:
                             new_meta_entry = GenMetadataEntry(
                                 type=METADATA_TYPE.censorship,
                                 value=METADATA_VALUE.nsfw,
                             )
-                            completed_job_info.job_image_results[i].generation_faults.append(new_meta_entry)
+                            completed_job_info.job_image_results[image_index].generation_faults.append(new_meta_entry)
                             completed_job_info.censored = True
                             if completed_job_info.state != GENERATION_STATE.csam:
                                 completed_job_info.state = GENERATION_STATE.censored
@@ -3321,8 +3321,9 @@ class HordeWorkerProcessManager:
                     file_name_to_use = f"kudos_model_training/{self.bridge_data.kudos_training_data_file}"
                     os.makedirs("kudos_model_training", exist_ok=True)
                     if os.path.exists(file_name_to_use) and os.path.getsize(file_name_to_use) > 2 * 1024 * 1024:
-                        for i in range(1, 10000):
-                            new_file_name = f"kudos_model_training/{self.bridge_data.kudos_training_data_file}.{i}"
+                        for file_suffix in range(1, 10000):
+                            kudos_file_base = self.bridge_data.kudos_training_data_file
+                            new_file_name = f"kudos_model_training/{kudos_file_base}.{file_suffix}"
                             if os.path.exists(new_file_name) and os.path.getsize(new_file_name) > 2 * 1024 * 1024:
                                 continue
 
@@ -3715,14 +3716,14 @@ class HordeWorkerProcessManager:
 
                             ref.append(str(job_pop_response.extra_source_images.index(predownload_extra_source_image)))
                 elif job_pop_response.extra_source_images is not None and downloaded_extra_source_images is None:
-                    ref = [str(i) for i in range(len(job_pop_response.extra_source_images))]
+                    ref = [str(image_index) for image_index in range(len(job_pop_response.extra_source_images))]
 
-                for r in ref:
+                for reference_id in ref:
                     self.job_faults[job_pop_response.id_].append(
                         GenMetadataEntry(
                             type=METADATA_TYPE.extra_source_images,
                             value=METADATA_VALUE.download_failed,
-                            ref=r,
+                            ref=reference_id,
                         ),
                     )
 

@@ -118,9 +118,9 @@ class LogConsoleRewriter(io.StringIO):
         """Initialise the rewriter."""
         self.original_iostream = original_iostream
 
-        pattern = r"\[36m(\d+)"
+        line_number_regex_pattern = r"\[36m(\d+)"
 
-        self.line_number_pattern = re.compile(pattern)
+        self.line_number_pattern = re.compile(line_number_regex_pattern)
 
     def write(self, message: str) -> int:
         """Rewrite the message to make it more readable where possible."""
@@ -144,12 +144,12 @@ class LogConsoleRewriter(io.StringIO):
             ("enable_performance_mode", "[ C ]"),
         ]
 
-        for old, new in replacements:
-            message = message.replace(old, new)
+        for original_text, shortened_text in replacements:
+            message = message.replace(original_text, shortened_text)
 
-        replacement = ""
+        empty_replacement = ""
 
-        message = self.line_number_pattern.sub(replacement, message)
+        message = self.line_number_pattern.sub(empty_replacement, message)
 
         if self.original_iostream is None:
             raise ValueError("self.original_iostream. is None!")
