@@ -98,7 +98,7 @@ class LogStats:
                     # Grab the lines we're interested in for models
                     if model_regex_match := REGEX.match(line):
                         date_matches = (
-                            self.period in [PERIOD_TODAY, PERIOD_YESTERDAY] 
+                            self.period in [PERIOD_TODAY, PERIOD_YESTERDAY]
                             and model_regex_match.group(1) != self.get_date()
                         )
                         if date_matches:
