@@ -1,5 +1,5 @@
 # Stage 1: Base environment setup
-ARG CUDA_VERSION=12.8.1
+ARG CUDA_VERSION=13.1.0
 FROM nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu22.04 AS base
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
